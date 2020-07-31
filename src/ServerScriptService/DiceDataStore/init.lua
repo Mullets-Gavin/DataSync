@@ -5,7 +5,7 @@
 
 --[[
 [DOCUMENTATION]:
-	[todo: link]
+	https://github.com/Mullets-Gavin/DiceDataStore
 	Listed below is a quick glance on the API, visit the link above for proper documentation
 
 [PLAYER SERVICE]:
