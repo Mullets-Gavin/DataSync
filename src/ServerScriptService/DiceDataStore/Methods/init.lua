@@ -25,7 +25,7 @@ local function SuccessMessage(userId,userName)
 	local timeInGame = convertTime(os.time() - Methods.Logs[userId]['Joined'])
 	local retryCount = Methods.Logs[userId]['Retries']
 	local dataSuccess = Methods.Logs[userId]['Success']
-	print('[DS]:',userName..'/'..userId,'| File size:',Methods.Logs[userId]['Size']..' bytes','| Time in-game:',timeInGame,'| Retries:',retryCount,'| Success:',dataSuccess)
+	print('[DS]:',userName..' ('..userId..')','| File size:',Methods.Logs[userId]['Size']..' bytes','| Time in-game:',timeInGame,'| Retries:',retryCount,'| Success:',dataSuccess)
 	Methods.Logs[userId] = nil
 end
 

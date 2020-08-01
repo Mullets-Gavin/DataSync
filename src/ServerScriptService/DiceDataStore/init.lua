@@ -393,9 +393,9 @@ function DataStore:CalculateSize(userId,autoSave)
 	if DataStore.Cache[userId] then
 		local getPlrName = Services['Players']:GetNameFromUserIdAsync(userId)
 		if not autoSave then
-			print('[DS]:',getPlrName..'/'..userId,'|','File size:',#Services['HttpService']:JSONEncode(DataStore.Cache[userId])..' bytes')
+			print('[DS]:',getPlrName..' ('..userId..')','|','File size:',#Services['HttpService']:JSONEncode(DataStore.Cache[userId])..' bytes')
 		else
-			print('[DS]:',getPlrName..'/'..userId,'|','File size:',#Services['HttpService']:JSONEncode(DataStore.Cache[userId])..' bytes','|','Auto saved data')
+			print('[DS]:',getPlrName..' ('..userId..')','|','File size:',#Services['HttpService']:JSONEncode(DataStore.Cache[userId])..' bytes','|','Auto saved data')
 		end
 	end
 end
