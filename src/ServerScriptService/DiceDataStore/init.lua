@@ -5,7 +5,7 @@
 
 --[[
 [DOCUMENTATION]:
-	https://github.com/Mullets-Gavin/DiceDataStore
+	[todo: link]
 	Listed below is a quick glance on the API, visit the link above for proper documentation
 
 [PLAYER SERVICE]:
@@ -37,6 +37,7 @@ DataStore.Cache = {}
 DataStore.Default = {}
 DataStore.Globals = {}
 DataStore.LoadedPlayers = {}
+DataStore.Shutdown = false
 DataStore.RemovePlayerRef = nil;
 DataStore.Key = 'mulletmafiadev'
 DataStore.GlobalKey = 'mulletmafialogs'
@@ -358,7 +359,8 @@ end
 	Returns:
 	true or false
 ]]--
-function DataStore:SaveData(userId,removeAfter)
+function DataStore:SaveData(userId,removeAfter,override)
+	if DataStore.Shutdown and not override then return end
 	if Services['RunService']:IsClient() then return DataStore:GetData(userId) end
 	if not DataStore.Cache[userId] then return end
 	local getFile = DataStore.Cache[userId]
@@ -450,6 +452,15 @@ coroutine.wrap(function()
 	end
 	
 	if Services['RunService']:IsServer() then
+		game:BindToClose(function()
+			print('[DS]: Shutting down and saving player data')
+			if Services['RunService']:IsStudio() then return end
+			DataStore.Shutdown = true
+			for index,plrs in pairs(Services['Players']:GetPlayers()) do
+				DataStore:SaveData(plrs.UserId,true,true)
+			end
+			wait(40)
+		end)
 		DataStore.Network.RetrieveData.OnServerInvoke = function(plrClient,toCall,dataFile,optFile)
 			if toCall == 'GetData' then
 				return DataStore:GetData(dataFile,optFile)
