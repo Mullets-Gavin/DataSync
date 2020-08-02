@@ -9,15 +9,15 @@
 	Listed below is a quick glance on the API, visit the link above for proper documentation
 
 [PLAYER SERVICE]:
+	:SetData()
 	:LoadData()
 	:SaveData()
 	:GetData()
 	:UpdateData()
 	:IncrementData()
-	:RemoveData() -- clear the cache and disconnect any events
-	:SetData() -- the default table for all your data needs, and can set a custom datastore name (optional)
-	:WatchData() -- activate a function everytime data is updated
-	:CalculateSize() -- calculate the size of a data store
+	:RemoveData()
+	:WatchData()
+	:CalculateSize() 
 
 [GLOBAL SERVICE]:
 	:SetGlobals()
@@ -25,10 +25,13 @@
 	:UpdateGlobals()
 
 [FEATURES]:
-	- Automatic retries (stops at 10)
+	- Automatic retries (stops at 5)
 	- Backups
-	- minimal network overhead
-	- localized methods
+	- Prevents data over writing saves per session
+	- Saves on BindToClose by default, no need to write your own code
+	- Super minimal networking with packets
+	- Real-time data replication
+	- Globals datastore support, meaning you can have a global datastore for your entire game
 ]]--
 
 --// logic
@@ -354,7 +357,7 @@ end
 --[[
 	Variations of call:
 	
-	:SaveData(userId)
+	:SaveData(userId,removeAfter)
 	
 	Returns:
 	true or false
@@ -367,7 +370,6 @@ function DataStore:SaveData(userId,removeAfter,override)
 	local loadFile,plrFile = DataStore.Methods.SaveData(userId,getFile,DataStore.Key,removeAfter)
 	if removeAfter == true then
 		DataStore.LoadedPlayers[userId] = nil
-		DataStore:RemoveData(userId)
 		DataStore.Cache[userId] = nil
 	end
 	return plrFile,loadFile
@@ -380,9 +382,14 @@ end
 ]]--
 function DataStore:RemoveData(userId)
 	if DataStore.Cache[userId] then
+		DataStore:UpdateData(userId,nil,'OVERRIDE')
+		DataStore:SaveData(userId,'OVERRIDE')
 		local Plr = Services['Players']:GetPlayerByUserId(userId)
 		pcall(function() if Plr then DataStore.Network.RetrieveData:InvokeClient(Plr,'UpdateData',userId,nil,'OVERRIDE') end end)
 		DataStore.Cache[userId] = nil
+	else
+		DataStore:UpdateData(userId,nil,'OVERRIDE')
+		DataStore:SaveData(userId,'OVERRIDE')
 	end
 end
 
