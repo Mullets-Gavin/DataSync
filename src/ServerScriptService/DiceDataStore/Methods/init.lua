@@ -4,6 +4,7 @@ Methods.Backups = require(script.Backups)
 Methods.Logs = {}
 Methods.Events = {}
 Methods.CurrentlySaving = {}
+Methods.CurrentlyLoading = {}
 Methods.RetryCount = 5
 
 --// services
@@ -69,7 +70,7 @@ function Methods.SaveData(userId,playerFile,storageKey,removeAfter)
 					end)
 				end)
 				retryCount = retryCount + 1
-				if not callSuccess then
+				if not callSuccess or retryCount < Methods.RetryCount then
 					wait(5)
 				end
 			until callSuccess or retryCount == Methods.RetryCount
@@ -94,7 +95,9 @@ function Methods.SaveData(userId,playerFile,storageKey,removeAfter)
 end
 
 function Methods.LoadData(userId,defaultFile,storageKey)
+	if table.find(Methods.CurrentlyLoading,userId) then return end
 	assert(typeof(defaultFile) == 'table','[DS]: The default file you are trying to load is not a table, can only load dictionaries/tables')
+	table.insert(Methods.CurrentlyLoading,userId)
 	if not Methods.Logs[userId] then Methods.Logs[userId] = {['Joined'] = os.time()} end
 	local datastoreKey
 	local success,err = pcall(function()
@@ -103,14 +106,23 @@ function Methods.LoadData(userId,defaultFile,storageKey)
 	local loadBackup = Methods.Backups:LoadBackup(userId,storageKey)
 	local playerData,returnedData
 	if tonumber(loadBackup) and datastoreKey then -- loaded either successfully or it doesn't exist
-		local callSuccess,callFail = pcall(function()
-			playerData = datastoreKey:GetAsync(loadBackup)
-		end)
+		local callSuccess,callFail
+		if loadBackup > 1 then
+			repeat
+				callSuccess,callFail = pcall(function()
+					playerData = datastoreKey:GetAsync(loadBackup)
+				end)
+				if not playerData then
+					loadBackup = loadBackup - 1
+				end
+			until playerData ~= nil or loadBackup == 0
+		end
 		if not callSuccess then
 			returnedData = deepCopy(defaultFile)
 			returnedData['Loaded'] = true
 			returnedData['CanSave'] = false
 			warn('[DS]:','Failed to load the players data')
+			pcall(function() table.remove(Methods.CurrentlyLoading,table.find(Methods.CurrentlyLoading,userId)) end)
 			return false,returnedData
 		end
 		
@@ -118,18 +130,21 @@ function Methods.LoadData(userId,defaultFile,storageKey)
 			returnedData = deepCopy(defaultFile)
 			returnedData['Loaded'] = true
 			returnedData['CanSave'] = true
+			pcall(function() table.remove(Methods.CurrentlyLoading,table.find(Methods.CurrentlyLoading,userId)) end)
 			return true,returnedData
 		end
 		
 		returnedData = playerData
 		returnedData['Loaded'] = true
 		returnedData['CanSave'] = true
+		pcall(function() table.remove(Methods.CurrentlyLoading,table.find(Methods.CurrentlyLoading,userId)) end)
 		return true,returnedData
 	else
 		returnedData = deepCopy(defaultFile)
 		returnedData['Loaded'] = true
 		returnedData['CanSave'] = false
 		warn('[DS]:','Failed to load the players data')
+		pcall(function() table.remove(Methods.CurrentlyLoading,table.find(Methods.CurrentlyLoading,userId)) end)
 		return false,returnedData
 	end
 end
