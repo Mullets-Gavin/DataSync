@@ -117,6 +117,9 @@ function Methods.LoadData(userId,defaultFile,storageKey)
 				end
 			until playerData ~= nil or loadBackup == 0
 		end
+		if Services['RunService']:IsStudio() then
+			callSuccess = true
+		end
 		if not callSuccess then
 			returnedData = deepCopy(defaultFile)
 			returnedData['Loaded'] = true
@@ -125,7 +128,6 @@ function Methods.LoadData(userId,defaultFile,storageKey)
 			pcall(function() table.remove(Methods.CurrentlyLoading,table.find(Methods.CurrentlyLoading,userId)) end)
 			return false,returnedData
 		end
-		
 		if playerData == nil then
 			returnedData = deepCopy(defaultFile)
 			returnedData['Loaded'] = true
@@ -133,7 +135,6 @@ function Methods.LoadData(userId,defaultFile,storageKey)
 			pcall(function() table.remove(Methods.CurrentlyLoading,table.find(Methods.CurrentlyLoading,userId)) end)
 			return true,returnedData
 		end
-		
 		returnedData = playerData
 		returnedData['Loaded'] = true
 		returnedData['CanSave'] = true
@@ -166,12 +167,10 @@ function Methods.GlobalData(key,defaultFile)
 			warn('[DS]:','Failed to load global data')
 			return false,returnedData
 		end
-		
 		if globalData == nil then
 			returnedData = deepCopy(defaultFile)
 			return true,returnedData
 		end
-		
 		returnedData = globalData
 		return true,returnedData
 	else
