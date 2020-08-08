@@ -400,13 +400,7 @@ end
 ]]--
 function DataStore:CalculateSize(userId,autoSave)
 	if DataStore.Cache[userId] then
-		local getPlrName
-		local success,err = pcall(function()
-			getPlrName = Services['Players']:GetNameFromUserIdAsync(userId)
-		end)
-		if not success then
-			getPlrName = 'Player'
-		end
+		local getPlrName = Services['Players']:GetNameFromUserIdAsync(userId)
 		if not autoSave then
 			print('[DS]:',getPlrName..' ('..userId..')','|','File size:',#Services['HttpService']:JSONEncode(DataStore.Cache[userId])..' bytes')
 		else

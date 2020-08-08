@@ -30,15 +30,15 @@ local function SuccessMessage(userId,userName)
 	Methods.Logs[userId] = nil
 end
 
-local function deepCopy(orig)
+local function DeepCopy(orig)
     local orig_type = type(orig)
     local copy
     if orig_type == 'table' then
         copy = {}
         for orig_key, orig_value in next, orig, nil do
-            copy[deepCopy(orig_key)] = deepCopy(orig_value)
+            copy[DeepCopy(orig_key)] = DeepCopy(orig_value)
         end
-        setmetatable(copy, deepCopy(getmetatable(orig)))
+        setmetatable(copy, DeepCopy(getmetatable(orig)))
     else
         copy = orig
     end
@@ -116,32 +116,35 @@ function Methods.LoadData(userId,defaultFile,storageKey)
 					loadBackup = loadBackup - 1
 				end
 			until playerData ~= nil or loadBackup == 0
-		end
-		if Services['RunService']:IsStudio() then
-			callSuccess = true
+		else
+			callSuccess,callFail = pcall(function()
+				playerData = datastoreKey:GetAsync(loadBackup)
+			end)
 		end
 		if not callSuccess then
-			returnedData = deepCopy(defaultFile)
+			returnedData = DeepCopy(defaultFile)
 			returnedData['Loaded'] = true
 			returnedData['CanSave'] = false
 			warn('[DS]:','Failed to load the players data')
 			pcall(function() table.remove(Methods.CurrentlyLoading,table.find(Methods.CurrentlyLoading,userId)) end)
 			return false,returnedData
 		end
+		
 		if playerData == nil then
-			returnedData = deepCopy(defaultFile)
+			returnedData = DeepCopy(defaultFile)
 			returnedData['Loaded'] = true
 			returnedData['CanSave'] = true
 			pcall(function() table.remove(Methods.CurrentlyLoading,table.find(Methods.CurrentlyLoading,userId)) end)
 			return true,returnedData
 		end
+		
 		returnedData = playerData
 		returnedData['Loaded'] = true
 		returnedData['CanSave'] = true
 		pcall(function() table.remove(Methods.CurrentlyLoading,table.find(Methods.CurrentlyLoading,userId)) end)
 		return true,returnedData
 	else
-		returnedData = deepCopy(defaultFile)
+		returnedData = DeepCopy(defaultFile)
 		returnedData['Loaded'] = true
 		returnedData['CanSave'] = false
 		warn('[DS]:','Failed to load the players data')
@@ -163,18 +166,20 @@ function Methods.GlobalData(key,defaultFile)
 			globalData = datastoreKey:GetAsync(loadBackup)
 		end)
 		if not callSuccess then
-			returnedData = deepCopy(defaultFile)
+			returnedData = DeepCopy(defaultFile)
 			warn('[DS]:','Failed to load global data')
 			return false,returnedData
 		end
+		
 		if globalData == nil then
-			returnedData = deepCopy(defaultFile)
+			returnedData = DeepCopy(defaultFile)
 			return true,returnedData
 		end
+		
 		returnedData = globalData
 		return true,returnedData
 	else
-		returnedData = deepCopy(defaultFile)
+		returnedData = DeepCopy(defaultFile)
 		warn('[DS]:','Failed to load global data')
 		return false,returnedData
 	end
