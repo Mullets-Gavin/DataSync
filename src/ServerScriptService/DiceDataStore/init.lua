@@ -472,7 +472,7 @@ coroutine.wrap(function()
 			for index,plrs in pairs(Services['Players']:GetPlayers()) do
 				DataStore:SaveData(plrs.UserId,true,true)
 			end
-			wait(40)
+			wait(5)
 		end)
 		DataStore.Network.RetrieveData.OnServerInvoke = function(plrClient,toCall,dataFile,optFile)
 			if toCall == 'GetData' then
