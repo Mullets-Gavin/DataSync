@@ -84,7 +84,14 @@ function Methods.SaveData(userId,playerFile,storageKey,removeAfter)
 				Methods.Logs[userId]['Success'] = true
 			end
 			if removeAfter == true then
-				SuccessMessage(userId,Services['Players']:GetNameFromUserIdAsync(userId))
+				local Username
+				local success,err = pcall(function()
+					Username = Services['Players']:GetNameFromUserIdAsync(userId)
+				end)
+				if not success then
+					Username = 'Player'
+				end
+				SuccessMessage(userId,Username)
 			end
 			pcall(function() table.remove(Methods.CurrentlySaving,table.find(Methods.CurrentlySaving,userId)) end)
 			return true,playerFile
