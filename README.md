@@ -43,6 +43,16 @@ DiceDataStore:SetData('data_key',{
 })
 ```
 
+### DiceDataStore:SetRemoval
+```
+:SetRemoval(dataTable)
+```
+*Only available on the server.* Set keys that are connected to your Default table to revert back to the original values upon saving the player data. This only happens whenever the player is leaving.
+
+*Example*
+```
+DiceDataStore:SetRemoval({'Number','Bool'}) -- upon leaving, these get set to 0 & false
+
 ### DiceDataStore:LoadData
 ```lua
 :LoadData(userID,autoSave)
