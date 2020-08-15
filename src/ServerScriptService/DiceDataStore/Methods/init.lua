@@ -45,7 +45,8 @@ local function DeepCopy(orig)
     return copy
 end
 
-function Methods.SaveData(userId,playerFile,storageKey,removeAfter)
+function Methods.SaveData(userId,playerFile,storageKey,removeAfter,permDelete)
+	if playerFile == nil and permDelete ~= 'PERM' then return end
 	if table.find(Methods.CurrentlySaving,userId) then return end
 	if removeAfter ~= 'OVERRIDE' then
 		assert(typeof(playerFile) == 'table','[DS]: The file you are trying to save is not a table, can only save dictionaries/tables')
@@ -56,6 +57,10 @@ function Methods.SaveData(userId,playerFile,storageKey,removeAfter)
 	if removeAfter == 'OVERRIDE' or playerFile['CanSave'] then
 		local createBackup = Methods.Backups:CreateBackup(userId,storageKey)
 		if tonumber(createBackup) then
+			if permDelete == 'PERM' then
+				Methods.Backups:RemoveBackups(userId,storageKey)
+				createBackup = 0
+			end
 			if removeAfter == true then
 				playerFile['CanSave'] = false
 				playerFile['Loaded'] = false

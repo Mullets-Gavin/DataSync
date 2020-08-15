@@ -41,6 +41,7 @@ DataStore.Default = {}
 DataStore.Globals = {}
 DataStore.Removal = {}
 DataStore.LoadedPlayers = {}
+DataStore.FlaggedData = {}
 DataStore.Shutdown = false
 DataStore.RemovePlayerRef = nil;
 DataStore.Key = 'mulletmafiadev'
@@ -231,13 +232,10 @@ function DataStore:UpdateData(userId,dataFile,newData)
 			elseif newData == 'OVERRIDE' then
 				DataStore.Cache[userId] = dataFile
 				getFile = DataStore.Cache[userId]
-				local Plr = game.Players:GetPlayerByUserId(userId)
-				if Plr then
-					DataStore.Network.SendData:FireClient(Plr,'UpdateData',userId,dataFile,newData)
-				end
 				return getFile,true
 			end
 		end
+		warn('[DS]:','The player file does not exist and/or you are missing arguments\n> Server |','Value:',dataFile,'|',newData)
 	elseif Services['RunService']:IsClient() then
 		local getFile = DataStore.Cache[Services['Players'].LocalPlayer.UserId]
 		if getFile then
@@ -252,6 +250,10 @@ function DataStore:UpdateData(userId,dataFile,newData)
 				DataStore.Cache[Services['Players'].LocalPlayer.UserId] = dataFile
 				getFile = dataFile
 				return getFile,true
+			elseif newData == 'OVERRIDE' then
+				DataStore.Cache[Services['Players'].LocalPlayer.UserId] = dataFile
+				getFile = DataStore.Cache[Services['Players'].LocalPlayer.UserId]
+				return getFile,true
 			end
 		elseif type(dataFile) == 'table' then -- assume its never been cached
 			DataStore.Cache[Services['Players'].LocalPlayer.UserId] = dataFile
@@ -261,8 +263,8 @@ function DataStore:UpdateData(userId,dataFile,newData)
 			end
 			return getFile,true
 		end
+		warn('[DS]:','The player file does not exist and/or you are missing arguments\n> Client |','Value:',dataFile,'|',newData)
 	end
-	warn('[DS]:','The player file does not exist and/or you are missing arguments\n> Value:',dataFile,'|',newData)
 	return false
 end
 
@@ -379,14 +381,16 @@ end
 function DataStore:SaveData(userId,removeAfter,override)
 	if DataStore.Shutdown and not override then return end
 	if Services['RunService']:IsClient() then return DataStore:GetData(userId) end
-	if not DataStore.Cache[userId] then return end
+	if not DataStore.Cache[userId] ~= nil and not override == 'PERM' then return end
 	local getFile = DataStore.Cache[userId]
-	for index,key in pairs(DataStore.Removal) do
-		if DataStore.Default[key] ~= nil then
-			DataStore:UpdateData(userId,key,DataStore.Default[key])
+	if override ~= 'PERM' and getFile ~= nil then
+		for index,key in pairs(DataStore.Removal) do
+			if DataStore.Default[key] ~= nil then
+				DataStore:UpdateData(userId,key,DataStore.Default[key])
+			end
 		end
 	end
-	local loadFile,plrFile = DataStore.Methods.SaveData(userId,getFile,DataStore.Key,removeAfter)
+	local loadFile,plrFile = DataStore.Methods.SaveData(userId,getFile,DataStore.Key,removeAfter,override)
 	if removeAfter == true then
 		DataStore.LoadedPlayers[userId] = nil
 		DataStore.Cache[userId] = nil
@@ -399,16 +403,24 @@ end
 	
 	:RemoveData(userId)
 ]]--
-function DataStore:RemoveData(userId)
+function DataStore:RemoveData(userId,all)
 	if DataStore.Cache[userId] then
 		DataStore:UpdateData(userId,nil,'OVERRIDE')
-		DataStore:SaveData(userId,'OVERRIDE')
+		if all then
+			DataStore:SaveData(userId,'OVERRIDE','PERM')
+		else
+			DataStore:SaveData(userId,'OVERRIDE')
+		end
 		local Plr = Services['Players']:GetPlayerByUserId(userId)
 		pcall(function() if Plr then DataStore.Network.RetrieveData:InvokeClient(Plr,'UpdateData',userId,nil,'OVERRIDE') end end)
 		DataStore.Cache[userId] = nil
 	else
 		DataStore:UpdateData(userId,nil,'OVERRIDE')
-		DataStore:SaveData(userId,'OVERRIDE')
+		if all then
+			DataStore:SaveData(userId,'OVERRIDE','PERM')
+		else
+			DataStore:SaveData(userId,'OVERRIDE')
+		end
 	end
 end
 

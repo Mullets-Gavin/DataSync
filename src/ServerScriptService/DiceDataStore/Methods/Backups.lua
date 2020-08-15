@@ -28,6 +28,22 @@ local function loadPointer(userId,storageKey,dataKey)
 	return Backups.Enum.Empty
 end
 
+function Backups:RemoveBackups(userId,storageKey)
+	local OrderedDataKey = Services['DataStoreService']:GetOrderedDataStore(storageKey..'_Pointer',userId)
+	local GrabPointer = loadPointer(userId,storageKey,OrderedDataKey)
+	local success,err = pcall(function()
+		for index = GrabPointer,1,-1 do
+			OrderedDataKey:RemoveAsync('Save_'..index)
+			wait(5)
+		end
+	end)
+	if success then
+		return true
+	end
+	warn('[DS]:',err)
+	return false
+end
+
 function Backups:CreateBackup(userId,storageKey)
 	local OrderedDataKey = Services['DataStoreService']:GetOrderedDataStore(storageKey..'_Pointer',userId)
 	local GrabPointer = loadPointer(userId,storageKey,OrderedDataKey)
