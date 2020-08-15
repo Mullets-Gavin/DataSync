@@ -39,6 +39,7 @@ local DataStore = {}
 DataStore.Cache = {}
 DataStore.Default = {}
 DataStore.Globals = {}
+DataStore.Removal = {}
 DataStore.LoadedPlayers = {}
 DataStore.Shutdown = false
 DataStore.RemovePlayerRef = nil;
@@ -84,6 +85,17 @@ function DataStore:SetData(dataFile,extraFile)
 		end
 	elseif Services['RunService']:IsClient() then
 		DataStore['Initialized'] = true
+	end
+end
+
+--[[
+	Variations of call:
+	
+	:SetRemoval({})
+]]--
+function DataStore:SetRemoval(dataFile)
+	if type(dataFile) == 'table' then
+		DataStore.Removal = dataFile
 	end
 end
 
@@ -367,6 +379,11 @@ function DataStore:SaveData(userId,removeAfter,override)
 	if Services['RunService']:IsClient() then return DataStore:GetData(userId) end
 	if not DataStore.Cache[userId] then return end
 	local getFile = DataStore.Cache[userId]
+	for index,key in pairs(DataStore.Removal) do
+		if DataStore.Default[key] ~= nil then
+			DataStore:UpdateData(userId,key,DataStore.Default[key])
+		end
+	end
 	local loadFile,plrFile = DataStore.Methods.SaveData(userId,getFile,DataStore.Key,removeAfter)
 	if removeAfter == true then
 		DataStore.LoadedPlayers[userId] = nil
