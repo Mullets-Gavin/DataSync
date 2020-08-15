@@ -126,7 +126,8 @@ end
 ]]--
 function DataStore:GetData(dataFile,optFile)
 	if Services['RunService']:IsClient() then
-		repeat Services['RunService'].Heartbeat:Wait() until DataStore['Initialized'] and DataStore['Cached'] and DataStore.LoadedPlayers == true
+		while not DataStore['Initialized'] and not DataStore['Cached'] and not DataStore.LoadedPlayers do Services['RunService'].Heartbeat:Wait() end
+		--repeat Services['RunService'].Heartbeat:Wait() until DataStore['Initialized'] and DataStore['Cached'] and DataStore.LoadedPlayers == true
 		if not dataFile then -- :GetData()
 			local getFile = DataStore.Cache[Services['Players'].LocalPlayer.UserId]
 			return getFile
@@ -146,7 +147,8 @@ function DataStore:GetData(dataFile,optFile)
 		end
 		return false
 	elseif Services['RunService']:IsServer() then
-		repeat Services['RunService'].Heartbeat:Wait() until DataStore.LoadedPlayers[dataFile] ~= nil and DataStore.Cache[dataFile] ~= nil
+		while DataStore.LoadedPlayers[dataFile] == nil and DataStore.Cache[dataFile] == nil do Services['RunService'].Heartbeat:Wait() end
+		--repeat Services['RunService'].Heartbeat:Wait() until DataStore.LoadedPlayers[dataFile] ~= nil and DataStore.Cache[dataFile] ~= nil
 		if tonumber(dataFile) and DataStore.Default[optFile] ~= nil then -- :GetData(userId,coins)
 			local getFile = DataStore.Cache[dataFile]
 			if getFile then
