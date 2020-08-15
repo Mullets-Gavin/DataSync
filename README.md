@@ -29,7 +29,7 @@ https://devforum.roblox.com/t/dice-datastore-games/702294
 Change a players data and manipulate the file with a cache that replicates to the client. This is limited down to the player ID provided.
 
 ### DiceDataStore:SetData
-```
+```lua
 :SetData(dataStoreKey,dataStoreDictionary)
 ```
 *Only available on the server.* Set up your default data file that players receive when they join on a key. Provide a dataStoreKey to keep track of your data. dataStoreDictionary should be a dictionary (table) for your data, allowing you to visually see what values are in your default file.
@@ -44,13 +44,13 @@ DiceDataStore:SetData('data_key',{
 ```
 
 ### DiceDataStore:SetRemoval
-```
+```lua
 :SetRemoval(dataTable)
 ```
 *Only available on the server.* Set keys that are connected to your Default table to revert back to the original values upon saving the player data. This only happens whenever the player is leaving.
 
 *Example*
-```
+```lua
 DiceDataStore:SetRemoval({'Number','Bool'}) -- upon leaving, these get set to 0 & false
 
 ### DiceDataStore:LoadData
