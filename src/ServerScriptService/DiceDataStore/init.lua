@@ -323,12 +323,12 @@ end
 function DataStore:WatchData(dataFile,valueFile,extraFile)
 	assert(type(dataFile) == 'string','To watch data, use a valid Key')
 	if type(valueFile) == 'function' and Services['RunService']:IsClient() then
-		if DataStore:GetData(dataFile) then
+		if DataStore:GetData(dataFile) ~= nil then
 			DataStore.Events.WatchData('Create',dataFile,valueFile)
 			return true
 		end
 	elseif type(valueFile) == 'number' and Services['RunService']:IsServer() then
-		if DataStore:GetData(valueFile,dataFile) then
+		if DataStore:GetData(valueFile,dataFile) ~= nil then
 			DataStore.Events.WatchData('Create',dataFile,valueFile,extraFile)
 			return true
 		end
