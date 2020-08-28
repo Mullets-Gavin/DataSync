@@ -64,10 +64,12 @@ end})
 function DataStore:SetData(dataFile,extraFile)
 	if type(dataFile) == 'table' then
 		DataStore.Default = dataFile
+		DataStore.Default['Loaded'] = false
 	elseif tostring(dataFile) then
 		DataStore.Key = dataFile
 		if type(extraFile) == 'table' then
 			DataStore.Default = extraFile
+			DataStore.Default['Loaded'] = false
 		end
 	end
 	if Services['RunService']:IsServer() then
@@ -128,7 +130,6 @@ end
 function DataStore:GetData(dataFile,optFile)
 	if Services['RunService']:IsClient() then
 		while not DataStore['Initialized'] or not DataStore['Cached'] or not DataStore.LoadedPlayers do Services['RunService'].Heartbeat:Wait() end
-		--repeat Services['RunService'].Heartbeat:Wait() until DataStore['Initialized'] and DataStore['Cached'] and DataStore.LoadedPlayers == true
 		if not dataFile then -- :GetData()
 			local getFile = DataStore.Cache[Services['Players'].LocalPlayer.UserId]
 			return getFile
@@ -149,7 +150,6 @@ function DataStore:GetData(dataFile,optFile)
 		return false
 	elseif Services['RunService']:IsServer() then
 		while DataStore.LoadedPlayers[dataFile] == nil and DataStore.Cache[dataFile] == nil do Services['RunService'].Heartbeat:Wait() end
-		--repeat Services['RunService'].Heartbeat:Wait() until DataStore.LoadedPlayers[dataFile] ~= nil and DataStore.Cache[dataFile] ~= nil
 		if tonumber(dataFile) and DataStore.Default[optFile] ~= nil then -- :GetData(userId,coins)
 			local getFile = DataStore.Cache[dataFile]
 			if getFile then
@@ -187,7 +187,8 @@ function DataStore:GetGlobals(dataFile)
 			end
 		end
 	elseif Services['RunService']:IsServer() then
-		repeat Services['RunService'].Heartbeat:Wait() until DataStore.Methods ~= nil and DataStore.INITIALIZED ~= nil
+		while not DataStore.Methods do Services['RunService'].Heartbeat:Wait() end
+		while not DataStore.INITIALIZED do Services['RunService'].Heartbeat:Wait() end
 		local loadFile,globalFile = DataStore.Methods.GlobalData(DataStore.GlobalKey,DataStore.Globals)
 		if dataFile ~= nil then
 			if DataStore.Globals[dataFile] then
@@ -276,6 +277,7 @@ end
 ]]--
 function DataStore:UpdateGlobals(dataFile,newData)
 	if Services['RunService']:IsServer() then
+		while not DataStore.Methods do Services['RunService'].Heartbeat:Wait() end
 		if newData ~= nil and dataFile then
 			DataStore.Globals[dataFile] = newData
 			local updatedFile,didSave = DataStore.Methods.SaveData(DataStore.GlobalKey,DataStore.Globals,DataStore.GlobalKey,'OVERRIDE')
@@ -348,6 +350,7 @@ end
 function DataStore:LoadData(userId,autoSave)
 	if Services['RunService']:IsClient() then return DataStore:GetData(userId) end
 	while DataStore.Cache[userId] do Services['RunService'].Heartbeat:Wait() end
+	while not DataStore.Methods do Services['RunService'].Heartbeat:Wait() end
 	local loadFile,plrFile = DataStore.Methods.LoadData(userId,DataStore.Default,DataStore.Key)
 	if autoSave then
 		coroutine.wrap(function()
@@ -483,10 +486,10 @@ coroutine.wrap(function()
 				script.Parent = Services['ReplicatedStorage']
 			end
 		end
-		if Services['RunService']:IsServer() and not DataStore.Methods then
+		if Services['RunService']:IsServer() and not DataStore.Methods and findMethods then
 			DataStore.Methods = require(findMethods)
 		end
-		if not DataStore.Events then
+		if not DataStore.Events and findEvents then
 			DataStore.Events = require(findEvents)
 		end
 		local findNetwork = script:FindFirstChild('Network')
