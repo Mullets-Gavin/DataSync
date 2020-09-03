@@ -1,7 +1,7 @@
 --// services
 local Services = setmetatable({}, {__index = function(cache, serviceName)
-    cache[serviceName] = game:GetService(serviceName)
-    return cache[serviceName]
+	cache[serviceName] = game:GetService(serviceName)
+	return cache[serviceName]
 end})
 
 --// functions

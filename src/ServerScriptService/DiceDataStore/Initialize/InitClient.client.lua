@@ -1,17 +1,22 @@
 --// services
 local Services = setmetatable({}, {__index = function(cache, serviceName)
-    cache[serviceName] = game:GetService(serviceName)
-    return cache[serviceName]
+	cache[serviceName] = game:GetService(serviceName)
+	return cache[serviceName]
 end})
 
 --// functions
 local Player = Services['Players'].LocalPlayer
 if script:IsDescendantOf(Player) then
-	for index,modules in pairs(Services['ReplicatedStorage']:GetDescendants()) do
-		if modules.Name == script.DataStoreName.Value then
-			require(modules)
+	local findModule = Services['ReplicatedStorage']:FindFirstChild(script.DataStoreName.Value,true)
+	local currentClock = tick()
+	while not findModule and tick() - currentClock < 5 do
+		for index,modules in pairs(Services['ReplicatedStorage']:GetDescendants()) do
+			if modules.Name == script.DataStoreName.Value then
+				findModule = modules
+			end
 		end
+		if findModule then break end
+		Services['RunService'].Heartbeat:Wait()
 	end
-	Services['RunService'].Heartbeat:Wait()
-	script:Destroy()
+	require(findModule)
 end
