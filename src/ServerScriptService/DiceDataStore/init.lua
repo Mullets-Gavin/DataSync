@@ -46,12 +46,13 @@ DataStore.Shutdown = false
 DataStore.RemovePlayerRef = nil;
 DataStore.Key = 'mulletmafiadev'
 DataStore.GlobalKey = 'mulletmafialogs'
-DataStore.INITIALIZED = false
+DataStore.Initialized = false
+DataStore.Cached = false
 
 --// services
 local Services = setmetatable({}, {__index = function(cache, serviceName)
-    cache[serviceName] = game:GetService(serviceName)
-    return cache[serviceName]
+	cache[serviceName] = game:GetService(serviceName)
+	return cache[serviceName]
 end})
 
 --// public functions
@@ -128,6 +129,19 @@ end
 	:GetData(userID)
 ]]--
 function DataStore:GetData(dataFile,optFile)
+	if Services['RunService']:IsStudio() and not Services['RunService']:IsServer() then
+		if tonumber(dataFile) and DataStore.Default[optFile] then -- :GetData(userId,coins)
+			local getUserData = DataStore.Network.RetrieveData:InvokeServer('GetData',dataFile,optFile)
+			if getUserData then
+				return getUserData
+			end
+		elseif tonumber(dataFile) and not optFile then -- :GetData(userID)
+			local getUserData = DataStore.Network.RetrieveData:InvokeServer('GetData',dataFile)
+			if getUserData then
+				return getUserData
+			end
+		end
+	end
 	if Services['RunService']:IsClient() then
 		while not DataStore['Initialized'] or not DataStore['Cached'] or not DataStore.LoadedPlayers do Services['RunService'].Heartbeat:Wait() end
 		if not dataFile then -- :GetData()
@@ -188,7 +202,7 @@ function DataStore:GetGlobals(dataFile)
 		end
 	elseif Services['RunService']:IsServer() then
 		while not DataStore.Methods do Services['RunService'].Heartbeat:Wait() end
-		while not DataStore.INITIALIZED do Services['RunService'].Heartbeat:Wait() end
+		while not DataStore.Initialized do Services['RunService'].Heartbeat:Wait() end
 		local loadFile,globalFile = DataStore.Methods.GlobalData(DataStore.GlobalKey,DataStore.Globals)
 		if dataFile ~= nil then
 			if DataStore.Globals[dataFile] then
@@ -259,9 +273,7 @@ function DataStore:UpdateData(userId,dataFile,newData)
 		elseif type(dataFile) == 'table' then -- assume its never been cached
 			DataStore.Cache[Services['Players'].LocalPlayer.UserId] = dataFile
 			getFile = DataStore.Cache[Services['Players'].LocalPlayer.UserId]
-			if not DataStore['Cached'] then
-				DataStore['Cached'] = true
-			end
+			DataStore['Cached'] = true
 			return getFile,true
 		end
 		warn('[DS]:','The player file does not exist and/or you are missing arguments\n> Client |','Value:',dataFile,'|',newData)
@@ -469,20 +481,23 @@ local function SearchDataModel(moduleName)
 end
 
 coroutine.wrap(function()
-	if not DataStore.INITIALIZED then
-		DataStore.INITIALIZED = true
-		local Source = script.Parent
+	if not DataStore.Initialized then
+		DataStore.Initialized = true
+		local flag = true
 		local findEvents = script:FindFirstChild('Events')
 		local findMethods = script:FindFirstChild('Methods')
-		if findMethods then
+		if findMethods and Services['RunService']:IsServer() then
 			findMethods.Parent = Services['ServerScriptService']
-			if SearchDataModel('PlayingCards') then
-				local loadPlayingCards = Services['ReplicatedStorage']:WaitForChild('PlayingCards')
-				local findDeckClient = loadPlayingCards:FindFirstChild('DeckClient')
+			local currentClock = tick()
+			while not _G.YieldForDeck and tick() - currentClock < 1 do Services['RunService'].Heartbeat:Wait() end
+			if _G.YieldForDeck then
+				local findDeckClient = _G.YieldForDeck('DeckClient')
 				if findDeckClient then
 					script.Parent = findDeckClient
+					flag = false
 				end
-			else
+			end
+			if flag then
 				script.Parent = Services['ReplicatedStorage']
 			end
 		end
