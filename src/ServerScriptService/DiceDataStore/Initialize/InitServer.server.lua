@@ -7,7 +7,7 @@ end})
 --// functions
 local Initialize = script.Parent
 local DataStore = Initialize.Parent
-if  DataStore then
+if DataStore then
 	require(DataStore)
 	local InitClient = Initialize:WaitForChild('InitClient')
 	InitClient.DataStoreName.Value = DataStore.Name
