@@ -1,8 +1,12 @@
+--[[
+	@Author: Gavin "Mullets" Rosenthal
+	@Desc: the internal for saving/loading/clearing
+--]]
+
 --// logic
 local Methods = {}
 Methods.RetryCount = 5
 Methods.Cache = {}
-Methods.Logs = {}
 Methods.Events = {}
 Methods.Current = {}
 Methods.Internal = {
@@ -47,20 +51,37 @@ function Methods.SetDefault(key,data)
 	end
 end
 
+function Methods:Clear(key,index,data)
+	assert(typeof(key) == 'string',"[DICE DATASTORE]: Key 'string' expected, got '".. typeof(key) .."'")
+	assert(index ~= nil,"[DICE DATASTORE]: Index expected, got '".. typeof(index) .."'")
+	table.insert(Methods.Current,index)	
+	
+	local datastore = Services['DataStoreService']:GetDataStore(key,index)
+	local retry = 0
+	local success,err = nil,nil
+	repeat
+		success,err = pcall(function()
+			datastore:RemoveAsync(key..':'..index)
+		end)
+		
+		if not success then
+			Manager.wait(6)
+			retry = retry + 1
+		end
+	until success or retry == Methods.RetryCount
+	
+	table.remove(Methods.Current,table.find(Methods.Current,index))
+	return success
+end
+
 function Methods:Save(key,index,data)
 	assert(typeof(key) == 'string',"[DICE DATASTORE]: Key 'string' expected, got '".. typeof(key) .."'")
 	assert(index ~= nil,"[DICE DATASTORE]: Index expected, got '".. typeof(index) .."'")
-	assert(typeof(data) == 'table',"[DICE DATASTORE]: Data 'table' or 'dictionary' expected, got '".. typeof(data) .."'")
-	
+	assert(typeof(data) == 'table' or data == nil,"[DICE DATASTORE]: Data 'table' or 'dictionary' expected, got '".. typeof(data) .."'")
 	if table.find(Methods.Current,index) then return end
 	table.insert(Methods.Current,index)
-	Manager.spawn(function()
-		Manager.wait(6)
-		table.remove(Methods.Current,table.find(Methods.Current,index))
-	end)
 	
-	if not Methods.Logs[index] then Methods.Logs[index] = {['Logged'] = os.time()} end
-	if data['___PlayingCards'] then
+	if data == nil or data['___PlayingCards'] then
 		local datastore = Services['DataStoreService']:GetDataStore(key,index)
 		local retry = 0
 		local success,err = nil,nil
@@ -75,16 +96,12 @@ function Methods:Save(key,index,data)
 				retry = retry + 1
 			end
 		until success or retry == Methods.RetryCount
-		Methods.Logs[index]['Retries'] = retry
-		Methods.Logs[index]['Key'] = key
-		Methods.Logs[index]['Index'] = index
-		Methods.Logs[index]['Results'] = success
-		Methods.Logs[index]['Size'] = #Services['HttpService']:JSONEncode(data)
-		Methods.Logs[index]['Reults'] = success
-		Methods.Logs[index] = nil
-		Services['RunService'].Heartbeat:Wait()
+		
+		table.remove(Methods.Current,table.find(Methods.Current,index))
 		return success
 	end
+	
+	table.remove(Methods.Current,table.find(Methods.Current,index))
 	warn('[DICE DATASTORE]: Failed to save',index,'on key',key)
 	return false
 end
@@ -92,21 +109,17 @@ end
 function Methods:Load(key,index)
 	assert(typeof(key) == 'string',"[DICE DATASTORE]: Key 'string' expected, got '".. typeof(key) .."'")
 	assert(index ~= nil,"[DICE DATASTORE]: Index expected, got '".. typeof(index) .."'")
-	
 	if table.find(Methods.Current,index) then return end
 	table.insert(Methods.Current,index)
-	Manager.spawn(function()
-		Manager.wait(6)
-		table.remove(Methods.Current,table.find(Methods.Current,index))
-	end)
 	
-	if not Methods.Logs[index] then Methods.Logs[index] = {['Logged'] = os.time()} end
 	if Methods.Cache[key] then
 		local results = {}
 		local datastore = Services['DataStoreService']:GetDataStore(key,index)
 		local success,err = pcall(function()
 			results = datastore:GetAsync(key..':'..index)
 		end)
+		
+		table.remove(Methods.Current,table.find(Methods.Current,index))
 		if not success then
 			results = DeepCopy(Methods.Cache[key])
 			results['___PlayingCards'] = false
@@ -120,6 +133,10 @@ function Methods:Load(key,index)
 		results['___PlayingCards'] = true
 		return results,true
 	end
+	
+	table.remove(Methods.Current,table.find(Methods.Current,index))
+	warn('[DICE DATASTORE]: Failed to load',index,'on key',key)
+	return false
 end
 
 return Methods
