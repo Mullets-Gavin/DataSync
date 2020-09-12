@@ -68,7 +68,7 @@ function Manager.wrap(code,...)
 	assert(typeof(code) == 'function',"[DICE MANAGER]: 'wrap' only accepts functions, got '".. typeof(code) .."'")
 	local contents = table.unpack({...})
 	local event
-	event = Services['RunService'].Heartbeat:Connect(function()
+	event = Services['RunService'].Stepped:Connect(function()
 		event:Disconnect()
 		return code(contents)
 	end)
@@ -82,7 +82,7 @@ end
 function Manager.spawn(code)
 	assert(typeof(code) == 'function',"[DICE MANAGER]: 'spawn' only accepts functions, got '".. typeof(code) .."'")
 	local event
-	event = Services['RunService'].Heartbeat:Connect(function()
+	event = Services['RunService'].Stepped:Connect(function()
 		event:Disconnect()
 		local success,err = pcall(function()
 			return code()
@@ -103,7 +103,7 @@ function Manager.delay(clock,code)
 	Manager.wrap(function()
 		local current = os.clock()
 		while clock < os.clock() - current do
-			Services['RunService'].Heartbeat:Wait()
+			Services['RunService'].Stepped:Wait()
 		end
 		return Manager.wrap(code)
 	end)
@@ -115,12 +115,13 @@ end
 	.wait(time)
 --]]
 function Manager.wait(clock)
-	assert(typeof(clock) == 'number',"[DICE MANAGER]: 'wait' expected number, got '".. typeof(clock) .."'")
-	local current = os.clock()
-	while clock > os.clock() - current do
-		Services['RunService'].Heartbeat:Wait()
+	if clock then
+		local current = os.clock()
+		while clock > os.clock() - current do
+			Services['RunService'].Stepped:Wait()
+		end
 	end
-	return true
+	return Services['RunService'].Stepped:Wait()
 end
 
 --[[
@@ -279,12 +280,13 @@ function Manager:Task(targetFPS)
 	local control = {}
 	control.CodeQueue = {}
 	control.UpdateTable = {}
+	control.Enable = true
 	control.Sleeping = true
 	control.Paused = false
 	control.UpdateTableEvent = nil
 	
 	local start = os.clock()
-	Services['RunService'].Heartbeat:Wait()
+	Services['RunService'].Stepped:Wait()
 	
 	local function Update()
 		Manager.LastIteration = os.clock()
@@ -295,24 +297,45 @@ function Manager:Task(targetFPS)
 	end
 	
 	local function Loop()
-		control.UpdateTableEvent = Services['RunService'].Heartbeat:Connect(Update)
+		control.UpdateTableEvent = Services['RunService'].Stepped:Connect(Update)
 		while (true) do
 			if control.Sleeping then break end
-			local fps = (((os.clock() - start) >= 1 and #control.UpdateTable) or (#control.UpdateTable / (os.clock() - start)))
-			if (fps >= targetFPS and (os.clock() - control.UpdateTable[1]) < (1 / targetFPS)) then
+			if not control:Enabled() then break end
+			if targetFPS < 0 then
 				if (#control.CodeQueue > 0) then
 					control.CodeQueue[1]()
 					table.remove(control.CodeQueue, 1)
+					if not control:Enabled() then
+						break
+					end
 				else
 					control.Sleeping = true
 					break
 				end
 			else
-				Services['RunService'].Heartbeat:Wait()
+				local fps = (((os.clock() - start) >= 1 and #control.UpdateTable) or (#control.UpdateTable / (os.clock() - start)))
+				if (fps >= targetFPS and (os.clock() - control.UpdateTable[1]) < (1 / targetFPS)) then
+					if (#control.CodeQueue > 0) then
+						control.CodeQueue[1]()
+						table.remove(control.CodeQueue, 1)
+						if not control:Enabled() then
+							break
+						end
+					else
+						control.Sleeping = true
+						break
+					end
+				elseif control:Enabled() then
+					Services['RunService'].Stepped:Wait()
+				end
 			end
 		end
 		control.UpdateTableEvent:Disconnect()
 		control.UpdateTableEvent = nil
+	end
+	
+	function control:Enabled()
+		return control.Enable
 	end
 	
 	function control:Pause()
@@ -334,14 +357,19 @@ function Manager:Task(targetFPS)
 	
 	function control:Wait()
 		while not control.Sleeping do
-			Services['RunService'].Heartbeat:Wait()
+			Services['RunService'].Stepped:Wait()
 		end
 		local fps = (((os.clock() - start) >= 1 and #control.UpdateTable) or (#control.UpdateTable / (os.clock() - start)))
 		return fps
 	end
 	
 	function control:Disconnect()
+		control.Enable = false
 		control:Pause()
+		control.CodeQueue = nil
+		control.UpdateTable = nil
+		control.UpdateTableEvent:Disconnect()
+		control:Wait()
 		for index in pairs(control) do
 			control[index] = nil
 		end
