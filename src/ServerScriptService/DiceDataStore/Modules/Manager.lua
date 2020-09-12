@@ -384,6 +384,7 @@ function Manager:Task(targetFPS)
 	end
 	
 	function control:Queue(code)
+		if not control.CodeQueue then return end
 		control.CodeQueue[#control.CodeQueue + 1] = code
 		if (control.Sleeping and not control.Paused) then
 			control.Sleeping = false
