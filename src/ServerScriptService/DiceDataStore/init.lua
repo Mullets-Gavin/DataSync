@@ -13,6 +13,7 @@
 	:SetData()
 	:LoadData()
 	:SaveData()
+	:ClearData()
 	:GetData()
 	:UpdateData()
 	:IncrementData()
@@ -36,6 +37,7 @@ DataStore.LoadedPlayers = {}
 DataStore.FlaggedData = {}
 
 local Configuration = {}
+Configuration.Timeout = 3
 Configuration.Key = nil
 Configuration.Cached = {}
 Configuration.Removal = {}
@@ -72,6 +74,8 @@ local NetRetrieve = Network.RetrieveData
 local IsStudio = Services['RunService']:IsStudio()
 local IsServer = Services['RunService']:IsServer()
 local IsClient = Services['RunService']:IsClient()
+local TaskTime = -1 -- set no delay on the task manager
+local API_Time = 6 -- the time it takes for api calls
 
 --// functions
 local function Send(...)
@@ -133,8 +137,8 @@ end
 --[[
 	Variations of call:
 	
-	:SetData('key',{})
-	:SetData('key',{},true)
+	:SetData(key,table)
+	:SetData(key,table,sync)
 ]]--
 function DataStore:SetData(...)
 	local data = {...}
@@ -144,83 +148,79 @@ function DataStore:SetData(...)
 	assert(typeof(key) == 'string',"[DICE DATASTORE]: Key 'string' expected, got '".. typeof(key) .."'")
 	assert(typeof(value) == 'table',"[DICE DATASTORE]: Data 'table' or 'dictionary' expected, got '".. typeof(key) .."'")
 	
-	if Configuration.Files[key] ~= nil then
-		if Configuration.Files[key]['Event'] then
-			Configuration.Files[key]['Event']:Disconnect()
-		end
-		if Configuration.Files[key]['Task'] then
-			Configuration.Files[key]['Task']:Disconnect()
-		end
-		Configuration.Files[key] = nil
-	end
-	
-	value['___PlayingCards'] = false
-	Methods.SetDefault(key,value)
-	Configuration.Files[key] = {
-		['Default'] = value;
-		['Cache'] = {};
-		['Tasks'] = {};
-		['Event'] = nil;
-		['Sync'] = sync;
-	}
-	
-	if sync and not Configuration.Key then
-		Configuration.Key = key
-	end
-	
-	if sync and IsServer then
-		local function SendCache(plr)
-			while not DataStore.LoadedPlayers[plr.UserId] do Services['RunService'].Heartbeat:Wait() end
-			Send(plr, Configuration.Internal.Set, key, Configuration.Files[key], sync)
+	Manager.wrap(function()
+		if Configuration.Files[key] ~= nil then
+			if Configuration.Files[key]['Event'] then
+				Configuration.Files[key]['Event']:Disconnect()
+			end
+			if Configuration.Files[key]['Task'] then
+				Configuration.Files[key]['Task']:Disconnect()
+			end
+			Configuration.Files[key] = nil
 		end
 		
-		Configuration.Files[key]['Event'] = Services['Players'].PlayerAdded:Connect(function(plr)
-			SendCache(plr)
-		end)
-		for index,plr in pairs(Services['Players']:GetPlayers()) do
-			SendCache(plr)
+		value['___PlayingCards'] = false
+		Methods.SetDefault(key,value)
+		Configuration.Files[key] = {
+			['Default'] = value;
+			['Cache'] = {};
+			['Tasks'] = {};
+			['Event'] = nil;
+			['Sync'] = sync;
+		}
+		
+		if sync and not Configuration.Key then
+			Configuration.Key = key
 		end
-	elseif IsClient then
-		DataStore.Initialized = true
-	end
+		
+		if sync and IsServer then
+			local function SendCache(plr)
+				while not DataStore.LoadedPlayers[plr.UserId] do Manager.wait() end
+				Send(plr, Configuration.Internal.Set, key, Configuration.Files[key], sync)
+			end
+			
+			Configuration.Files[key]['Event'] = Services['Players'].PlayerAdded:Connect(function(plr)
+				SendCache(plr)
+			end)
+			for index,plr in pairs(Services['Players']:GetPlayers()) do
+				SendCache(plr)
+			end
+		elseif IsClient then
+			DataStore.Initialized = true
+		end
+	end)
 end
 
 --[[
 	Variations of call:
 	
-	:SetRemoval({})
+	:SetRemoval(table)
+	:SetRemoval(key,table)
 ]]--
 function DataStore:SetRemoval(...)
 	local data = {...}
 	local key = data[1]
 	local value = data[2]
-	assert(typeof(key) == 'string',"[DICE DATASTORE]: Key 'string' expected, got '".. typeof(key) .."'")
-	assert(typeof(value) == 'table',"[DICE DATASTORE]: Data 'table' or 'dictionary' expected, got '".. typeof(key) .."'")
-	Configuration.Removal[key] = value
+	
+	Manager.wrap(function()
+		if typeof(key) == 'table' then
+			while Configuration.Key == nil do Manager.wait() end
+			value = key
+			key = Configuration.Key
+		end
+		Configuration.Removal[key] = value
+	end)
 end
 
 --[[
 	Variations of call:
 	
 	:GetData()
-	:GetData(coins)
-	:GetData(userID,coins)
-	:GetData(userID)
-	
-	:GetData() -- Config.Key, LocalPlayer.UserId
-	Returns entire default table
-	
-	:GetData(value) -- Config.Key, LocalPlayer.UserId, value
-	Returns value from default table with player id as key
-	
-	:GetData(index,value) -- Config.Key, index, value
-	Returns value from default table
-	
-	:GetData(key,index) -- key, index
-	Returns entire table
-	
-	:GetData(key,index,value) -- key, index, value
-	Returns value from table
+	:GetData(value)
+	:GetData(index)
+	:GetData(index,value)
+	:GetData(key,index)
+	:GetData(key,index,value)
 ]]--
 function DataStore:GetData(...)
 	local data = {...}
@@ -229,7 +229,7 @@ function DataStore:GetData(...)
 	local value = data[3]
 	local plr = nil
 	local task = nil
-		
+	
 	local control = {}
 	control.__Return = nil
 	control.__Update = function()
@@ -237,22 +237,18 @@ function DataStore:GetData(...)
 			if tonumber(index) ~= Player.UserId and Configuration.Key == key and plr then
 				local get = Retrieve(plr, Configuration.Internal.Get, key, index, value)
 				control.__Return = get
-				task:Pause()
 				return
 			end
 		end
 		if value == nil then
 			control.__Return = Configuration.Files[key]['Cache'][index]
-			task:Pause()
 			return
 		elseif value ~= nil then
 			control.__Return = Configuration.Files[key]['Cache'][index][value]
-			task:Pause()
 			return
 		end
 		warn("[DICE DATASTORE]: Could not find data, key '",key,"' and index '",index,"' and '",value,"'")
 		control.__Return = false
-		task:Pause()
 		return
 	end
 	
@@ -260,41 +256,57 @@ function DataStore:GetData(...)
 	if not plr then
 		plr = GetPlayer(index)
 	end
-	while Configuration.Key == nil do Services['RunService'].Heartbeat:Wait() end
-	if key ~= nil and not index and not value and IsClient then
+	while Configuration.Key == nil do Manager.wait() end
+	if not key and not index and not value and IsClient then
+		key = Configuration.Key
+		index = Player.UserId
+		value = nil
+	elseif key ~= nil and not index and not value and IsClient then
 		value = key
 		index = Player.UserId
 		key = Configuration.Key
-	elseif tonumber(key) and key ~= Configuration.Key and index ~= nil then
+	elseif tonumber(key) and key ~= Configuration.Key and not index and not value then
+		value = nil
+		index = tonumber(key)
+		key = Configuration.Key
+		if not Player then
+			while DataStore.LoadedPlayers[index] == nil do Manager.wait() end
+		elseif Player.UserId == tonumber(key) then
+			while DataStore.LoadedPlayers[index] == nil do Manager.wait() end
+		end
+	elseif tonumber(key) and key ~= Configuration.Key and index ~= nil and not value then
 		value = index
 		index = tonumber(key)
 		key = Configuration.Key
 		if not Player then
-			while DataStore.LoadedPlayers[index] == nil do Services['RunService'].Heartbeat:Wait() end
+			while DataStore.LoadedPlayers[index] == nil do Manager.wait() end
 		elseif Player.UserId == tonumber(key) then
-			while DataStore.LoadedPlayers[index] == nil do Services['RunService'].Heartbeat:Wait() end
+			while DataStore.LoadedPlayers[index] == nil do Manager.wait() end
 		end
 	end
 	
 	assert(typeof(key) == 'string',"[DICE DATASTORE]: Key 'string' expected, got '".. typeof(key) .."'")
 	assert(index ~= nil,"[DICE DATASTORE]: Index expected, got '".. typeof(index) .."'")
-	while Configuration.Files[key] == nil do Services['RunService'].Heartbeat:Wait() end
-	while Configuration.Files[key]['Cache'][index] == nil do Services['RunService'].Heartbeat:Wait() end
+	while Configuration.Files[key] == nil do Manager.wait() end
+	while Configuration.Files[key]['Cache'][index] == nil do Manager.wait() end
 	task = Configuration.Files[key]['Tasks'][index]
 	if not task then
-		Configuration.Files[key]['Tasks'][index] = Manager:Task(60)
+		Configuration.Files[key]['Tasks'][index] = Manager:Task(TaskTime)
 		task = Configuration.Files[key]['Tasks'][index]
 	end
+	
 	task:Queue(control.__Update)
-	task:Resume()
-	return control.__Return
+	local test = control.__Return ~= nil and true or false
+	return control.__Return,test
 end
 
 --[[
 	Variations of call:
 	
-	:UpdateData(userId,newFile)
-	:UpdateData(userId,dataFile,newData)
+	:UpdateData(index,value)
+	:UpdateData(key,index,value)
+	:UpdateData(index,value,change)
+	:UpdateData(key,index,value,change)
 ]]--
 function DataStore:UpdateData(...)
 	local data = {...}
@@ -302,6 +314,7 @@ function DataStore:UpdateData(...)
 	local index = data[2]
 	local value = data[3]
 	local change = data[4]
+	local code = ''
 	local plr = nil
 	local task = nil
 	
@@ -318,10 +331,14 @@ function DataStore:UpdateData(...)
 			control.__Return = value
 			local parse = key..':'..index..':{}'
 			Manager:FireKey(parse,value)
-			task:Pause()
 			return
 		elseif value ~= nil then
-			Configuration.Files[key]['Cache'][index][value] = change
+			local success,err = pcall(function()
+				Configuration.Files[key]['Cache'][index][value] = change
+			end)
+			if not success then
+				warn('[DICE DATASTORE]: Failed to change, error:',err,debug.traceback())
+			end
 			if plr and IsServer then
 				Manager.spawn(function()
 					Send(plr, Configuration.Internal.Update, key, index, value, change)
@@ -330,12 +347,10 @@ function DataStore:UpdateData(...)
 			control.__Return = change
 			local parse = key..':'..index..':'..value
 			Manager:FireKey(parse,change)
-			task:Pause()
 			return
 		end
-		warn("[DICE DATASTORE]: Could not find data, key '",key,"' and index '",index,"' and '",value,"'")
+		
 		control.__Return = false
-		task:Pause()
 		return
 	end
 	
@@ -348,27 +363,31 @@ function DataStore:UpdateData(...)
 		value = index
 		index = tonumber(key)
 		key = Configuration.Key
-		while DataStore.LoadedPlayers[index] == nil do Services['RunService'].Heartbeat:Wait() end
+		while DataStore.LoadedPlayers[index] == nil do Manager.wait() end
 	end
-	
+	if typeof(value) ~= 'table' then
+		while Configuration.Files[key]['Cache'][index] == nil do Manager.wait() end
+	end
 	assert(typeof(key) == 'string',"[DICE DATASTORE]: Key 'string' expected, got '".. typeof(key) .."'")
 	assert(index ~= nil,"[DICE DATASTORE]: Index expected, got '".. typeof(index) .."'")
-	while Configuration.Files[key] == nil do Services['RunService'].Heartbeat:Wait() end
+	while Configuration.Files[key] == nil do Manager.wait() end
+	
 	task = Configuration.Files[key]['Tasks'][index]
 	if not task then
-		Configuration.Files[key]['Tasks'][index] = Manager:Task(60)
+		Configuration.Files[key]['Tasks'][index] = Manager:Task(TaskTime)
 		task = Configuration.Files[key]['Tasks'][index]
 	end
+	
 	task:Queue(control.__Update)
-	task:Resume()
-	return control.__Return
+	local test = control.__Return ~= nil and true or false
+	return control.__Return,test
 end
 
 --[[
 	Variations of call:
 	
-	:IncrementData(userId,'coins',5)
-	:IncrementData(userId,'coins',-5)
+	:IncrementData(index,value,increment)
+	:IncrementData(key,index,value,increment)
 ]]--
 function DataStore:IncrementData(...)
 	local data = {...}
@@ -377,13 +396,13 @@ function DataStore:IncrementData(...)
 	local value = data[3]
 	local change = data[4]
 	
-	while Configuration.Key == nil do Services['RunService'].Heartbeat:Wait() end
+	while Configuration.Key == nil do Manager.wait() end
 	if tonumber(key) and key ~= Configuration.Key and index ~= nil then
 		change = value
 		value = index
 		index = tonumber(key)
 		key = Configuration.Key
-		while DataStore.LoadedPlayers[index] == nil do Services['RunService'].Heartbeat:Wait() end
+		while DataStore.LoadedPlayers[index] == nil do Manager.wait() end
 	end
 	
 	local current = DataStore:GetData(key,index,value)
@@ -397,12 +416,10 @@ end
 --[[
 	Variations of call:
 	
-	:WatchData(data,userId,function) -- SERVER ONLY
-	:WatchData(data,function) -- CLIENT ONLY
-	
-	:WatchData(key,index,value,function)
-	:WatchData(index,value,function)
-	:WatchData(value,function)
+	:WatchData(function) -- client
+	:WatchData(value,function) -- client
+	:WatchData(index,value,function) -- shared
+	:WatchData(key,index,value,function) -- shared
 ]]--
 function DataStore:WatchData(...)
 	local data = {...}
@@ -411,7 +428,7 @@ function DataStore:WatchData(...)
 	local value = data[3]
 	local func = data[4]
 	
-	while not Configuration.Key do Services['RunService'].Heartbeat:Wait() end
+	while not Configuration.Key do Manager.wait() end
 	if key ~= nil and index == nil and value == nil and func == nil and IsClient then
 		func = key
 		value = '{}'
@@ -445,8 +462,8 @@ end
 --[[
 	Variations of call:
 	
-	:LoadData(userId)
-	:LoadData(userId,true)
+	:LoadData(index,autosave)
+	:LoadData(key,index,autosave)
 	
 	Returns:
 	true/false, data
@@ -459,6 +476,7 @@ function DataStore:LoadData(...)
 	local auto = data[3] or false
 	local plr = nil
 	
+	while Configuration.Key == nil do Manager.wait() end
 	if tonumber(key) and key ~= Configuration.Key then
 		pcall(function()
 			plr = Services['Players']:GetPlayerByUserId(key)
@@ -478,37 +496,34 @@ function DataStore:LoadData(...)
 	
 	local success,results = false,false
 	local function Load()
-		if not table.find(DataStore.FlaggedData,index) then
-			table.insert(DataStore.FlaggedData,index)
-			local goal = os.clock() + 6
-			Manager.spawn(function()
-				while os.clock() < goal do
-					Services['RunService'].Heartbeat:Wait()
-				end
-				table.remove(DataStore.FlaggedData,table.find(DataStore.FlaggedData,index))
-				if auto then
-					while Configuration.Files[key]['Cache'][index] do
-						Services['RunService'].Heartbeat:Wait()
-						Manager.wait(300)
-						DataStore:SaveData(key,index)
-					end
-				end
+		while table.find(DataStore.FlaggedData,index) do Manager.wait() end
+		table.insert(DataStore.FlaggedData,index)
+		
+		results,success = Methods:Load(key,index)
+		Configuration.Files[key]['Cache'][index] = results
+		if plr then
+			Manager.wrap(function()
+				DataStore:UpdateData(key,index,results)
 			end)
-			results,success = Methods:Load(key,index)
-			Configuration.Files[key]['Cache'][index] = results
-			if plr then
-				Manager.wrap(function()
-					DataStore:UpdateData(key,index,results)
-				end)
-			end
-			DataStore:CalculateSize(key,index,'Loaded data')
 		end
+		
+		DataStore:CalculateSize(key,index,'Loaded data')
+		table.remove(DataStore.FlaggedData,table.find(DataStore.FlaggedData,index))
+		Manager.spawn(function()
+			if auto then
+				while Configuration.Files[key]['Cache'][index] do
+					Manager.wait()
+					Manager.wait(300)
+					DataStore:SaveData(key,index)
+				end
+			end
+		end)
 		return success
 	end
 	
 	local task = Configuration.Files[key]['Tasks'][index]
 	if not task then
-		task = Manager:Task(60)
+		task = Manager:Task(TaskTime)
 		Configuration.Files[key]['Tasks'][index] = task
 	end
 	task:Queue(Load)
@@ -519,7 +534,7 @@ end
 --[[
 	Variations of call:
 	
-	:SaveData(userId,removeAfter)
+	:SaveData(index,remove)
 	:SaveData(key,index,remove)
 	
 	Returns:
@@ -544,7 +559,7 @@ function DataStore:SaveData(...)
 		assert(typeof(key) == 'string',"[DICE DATASTORE]: Key 'string' expected, got '".. typeof(key) .."'")
 		assert(index ~= nil,"[DICE DATASTORE]: Index expected, got '".. typeof(index) .."'")
 	end
-		
+	
 	if DataStore.Shutdown then
 		remove = true
 	end
@@ -556,77 +571,153 @@ function DataStore:SaveData(...)
 	
 	local results = false
 	local function Save()
-		if not table.find(DataStore.FlaggedData,index) then
-			table.insert(DataStore.FlaggedData,index)
-			local goal = os.clock() + 6
-			local value = Configuration.Files[key]['Cache'][index]
-			Manager.spawn(function()
-				while os.clock() < goal do
-					Services['RunService'].Heartbeat:Wait()
+		while table.find(DataStore.FlaggedData,index) do Manager.wait() end
+		table.insert(DataStore.FlaggedData,index)
+		local value = Configuration.Files[key]['Cache'][index]
+		if value == nil then return end
+		
+		Manager.spawn(function()
+			if remove then
+				value['___PlayingCards'] = false
+				if Configuration.Files[key]['Tasks'][index] ~= nil then
+					if Configuration.Files[key]['Tasks'][index]:Enabled() then
+						Configuration.Files[key]['Tasks'][index]:Disconnect()
+						Configuration.Files[key]['Tasks'][index] = nil
+					end
 				end
-				if remove then
-					value['___PlayingCards'] = false
-					Configuration.Files[key]['Tasks'][index]:Disconnect()
-					Configuration.Files[key]['Tasks'][index] = nil
+				if Configuration.Files[key]['Cache'][index] ~= nil then
 					Configuration.Files[key]['Cache'][index] = nil
 				end
-				table.remove(DataStore.FlaggedData,table.find(DataStore.FlaggedData,index))
-			end)
+			end
+		end)
+		
+		if remove then
 			for index,stat in pairs(Configuration.Removal[key]) do
 				value[stat] = Configuration.Files[key]['Default'][stat]
 			end
-			results = Methods:Save(key,index,value)
-			if not DataStore.Shutdown then
-				DataStore:CalculateSize(key,index,'Saved data')
-			end
 		end
+		
+		results = Methods:Save(key,index,value)
+		if not DataStore.Shutdown then
+			DataStore:CalculateSize(key,index,'Saved data')
+		end
+		table.remove(DataStore.FlaggedData,table.find(DataStore.FlaggedData,index))
 		return results
 	end
 	
+	while table.find(DataStore.FlaggedData,index) do Manager.wait() end
 	local task = Configuration.Files[key]['Tasks'][index]
 	if task then
-		task:Queue(Save)
-		Services['RunService'].Heartbeat:Wait()
+		pcall(function()
+			task:Queue(Save)
+		end)
 		return results
 	end
-	return Save()
+	return false
 end
 
 --[[
 	Variations of call:
 	
-	:RemoveData(userId)
+	:ClearData(index,remove)
+	:ClearData(key,index,remove)
+	
+	Returns:
+	true or false
 ]]--
-function DataStore:RemoveData(userId,all)
-	if DataStore.Cache[userId] then
-		DataStore:UpdateData(userId,nil,'OVERRIDE')
-		if all then
-			DataStore:SaveData(userId,'OVERRIDE','PERM')
-		else
-			DataStore:SaveData(userId,'OVERRIDE')
-		end
-		local Plr = Services['Players']:GetPlayerByUserId(userId)
-		pcall(function() if Plr then DataStore.Network.RetrieveData:InvokeClient(Plr,'UpdateData',userId,nil,'OVERRIDE') end end)
-		DataStore.Cache[userId] = nil
-	else
-		DataStore:UpdateData(userId,nil,'OVERRIDE')
-		if all then
-			DataStore:SaveData(userId,'OVERRIDE','PERM')
-		else
-			DataStore:SaveData(userId,'OVERRIDE')
+function DataStore:ClearData(...)
+	if IsClient then return end
+	local data = {...}
+	local key = data[1]
+	local index = data[2]
+	local flag = true
+		
+	if tonumber(key) and key ~= Configuration.Key then
+		index = key
+		key = Configuration.Key
+		flag = false
+	end
+	if flag then
+		assert(typeof(key) == 'string',"[DICE DATASTORE]: Key 'string' expected, got '".. typeof(key) .."'")
+		assert(index ~= nil,"[DICE DATASTORE]: Index expected, got '".. typeof(index) .."'")
+	end
+	
+	if not Configuration.Files[key] then
+		warn("[DICE DATASTORE]: Failed to save data, key expected, got '",typeof(key),"'")
+		return false
+	end
+	
+	local results = false
+	local function Clear()		
+		Manager.spawn(function()
+			if Configuration.Files[key]['Tasks'][index] ~= nil then
+				Configuration.Files[key]['Tasks'][index]:Disconnect()
+				Configuration.Files[key]['Tasks'][index] = nil
+			end
+		end)
+		
+		Configuration.Files[key]['Cache'][index] = {}
+		results = Methods:Clear(key,index)
+		DataStore:CalculateSize(key,index,'Cleared data')
+		Configuration.Files[key]['Cache'][index] = nil
+		return results
+	end
+	
+	return Clear()
+end
+
+--[[
+	Variations of call:
+	
+	:RemoveData(key,index)
+]]--
+function DataStore:RemoveData(...)
+	if IsClient then return end
+	local data = {...}
+	local key = data[1]
+	local index = data[2]
+	
+	if tonumber(key) and key ~= Configuration.Key then
+		index = tonumber(key)
+		key = Configuration.Key
+	end
+	
+	DataStore:ClearData(key,index)
+	
+	table.insert(DataStore.FlaggedData,index)
+	local findPlayer; do
+		local success,err = pcall(function()
+			findPlayer = Services['Players']:GetPlayerByUserId(index)
+		end)
+		if findPlayer then
+			findPlayer:Kick('\nCleared Data')
 		end
 	end
+	Manager.wait(API_Time)
+	table.remove(DataStore.FlaggedData,table.find(DataStore.FlaggedData,index))
 end
 
 --[[
 	Variations of call:
 	
-	:CalculateSize(userId)
+	:CalculateSize(index[,optional text])
+	:CalculateSize(key,index[,optional text])
 	
 	Returns:
 	success state
 ]]--
-function DataStore:CalculateSize(key,index,suffix)
+function DataStore:CalculateSize(...)
+	local data = {...}
+	local key = data[1]
+	local index = data[2]
+	local suffix = data[3]
+	
+	if tonumber(key) and key ~= Configuration.Key then
+		suffix = index
+		index = tonumber(key)
+		key = Configuration.Key
+	end
+	
 	if suffix then
 		suffix = '| '.. suffix
 	else
@@ -634,7 +725,7 @@ function DataStore:CalculateSize(key,index,suffix)
 	end
 	
 	if Configuration.Files[key] then
-		local value = Configuration.Files[key]['Cache'][index]
+		local value = Configuration.Files[key]['Cache'][index] or {}
 		if value then
 			local getPlrName
 			local success,err = pcall(function()
@@ -660,7 +751,7 @@ Manager.wrap(function()
 		DataStore.Initialized = true
 		Manager.spawn(function()
 			local currentClock = os.clock()
-			while not _G.YieldForDeck and os.clock() - currentClock < 1 do Services['RunService'].Heartbeat:Wait() end
+			while not _G.YieldForDeck and os.clock() - currentClock < 1 do Manager.wait() end
 			if not _G.YieldForDeck then
 				script.Parent = Services['ReplicatedStorage']
 			end
@@ -671,7 +762,7 @@ Manager.wrap(function()
 		game:BindToClose(function()
 			DataStore.Shutdown = true
 			print('[DICE DATASTORE]: Shutting down and saving player data')
-			local ShutdownTask = Manager:Task(60)
+			local ShutdownTask = Manager:Task(TaskTime)
 			for index,content in pairs(Configuration.Files[Configuration.Key]['Cache']) do
 				ShutdownTask:Queue(Manager.wrap(function()
 					local results = DataStore:SaveData(Configuration.Key,index,false)
